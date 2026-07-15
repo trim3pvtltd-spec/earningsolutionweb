@@ -1,9 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Phone, ShieldCheck, Sparkles, Loader2 } from 'lucide-react';
+import { Phone, ShieldCheck, Loader2 } from 'lucide-react';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { firebaseAuth } from '@/lib/firebase';
+import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
+import { api } from '@/lib/api';
 
 type Step = 'mobile' | 'otp' | 'details';
 
@@ -16,36 +19,102 @@ export default function LoginPage() {
   const [referralCode, setReferralCode] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [language, setLanguage] = useState<'en' | 'hi' | 'hinglish'>('en');
 
-  // NOTE: Actual OTP send/verify happens via Firebase Client SDK.
-  // This UI shows the flow; wire up firebase/auth's signInWithPhoneNumber
-  // + RecaptchaVerifier here, then POST the resulting idToken to
-  // /api/v1/auth/verify-otp (see backend/src/auth/auth.controller.ts).
+  const confirmationRef = useRef<ConfirmationResult | null>(null);
+  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
+
+  useEffect(() => {
+    if (!recaptchaRef.current) {
+      recaptchaRef.current = new RecaptchaVerifier(firebaseAuth, 'recaptcha-container', {
+        size: 'invisible',
+      });
+    }
+  }, []);
 
   const sendOtp = async () => {
     if (mobile.length !== 10) return;
+    setError('');
     setLoading(true);
-    // await firebaseSendOtp(mobile)
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const confirmation = await signInWithPhoneNumber(
+        firebaseAuth,
+        +91${mobile},
+        recaptchaRef.current!,
+      );
+      confirmationRef.current = confirmation;
       setStep('otp');
-    }, 600);
+    } catch (err: any) {
+      setError(err?.message || 'Could not send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const verifyOtp = async () => {
-    if (otp.length !== 6) return;
+    if (otp.length !== 6 || !confirmationRef.current) return;
+    setError('');
     setLoading(true);
-    // const idToken = await firebaseVerifyOtp(otp)
-    // const { data } = await api.post('/auth/verify-otp', { idToken, fullName, referralCode })
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const result = await confirmationRef.current.confirm(otp);
+      const idToken = await result.user.getIdToken();
+
+      const { data } = await api.post('/auth/verify-otp', { idToken, deviceId: 'web' }).catch(
+        async (err) => {
+          if (err.response?.status === 400) {
+            return { data: null };
+          }
+          throw err;
+        },
+      );
+
+      if (!data) {
+        setStep('details');
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem('ews_access_token', data.accessToken);
+      localStorage.setItem('ews_refresh_token', data.refreshToken);
       router.push('/dashboard');
-    }, 600);
+    } catch (err: any) {
+      setError(err?.message || 'Invalid OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const completeSignup = async () => {
+    if (!agreed || !fullName) return;
+    setError('');
+    setLoading(true);
+    try {
+      const currentUser = firebaseAuth.currentUser;
+      if (!currentUser) throw new Error('Session expired — please verify your mobile number again.');
+      const freshIdToken = await currentUser.getIdToken();
+
+      const { data } = await api.post('/auth/verify-otp', {
+        idToken: freshIdToken,
+        fullName,
+        referralCode: referralCode || undefined,
+        deviceId: 'web',
+      });
+
+      localStorage.setItem('ews_access_token', data.accessToken);
+      localStorage.setItem('ews_refresh_token', data.refreshToken);
+      router.push('/dashboard');
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Could not create account. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-brand-gradient p-4">
+      <div id="recaptcha-container" />
+
       <div className="absolute right-6 top-6">
         <div className="flex gap-1 rounded-full bg-white/10 p-1 backdrop-blur-glass">
           {(['en', 'hi', 'hinglish'] as const).map((lang) => (
@@ -70,10 +139,14 @@ export default function LoginPage() {
           <h1 className="mt-4 text-xl font-bold text-ink">Earning with Solution</h1>
           <p className="mt-1 text-sm text-ink-muted">
             {step === 'mobile' && 'Login or sign up with your mobile number'}
-            {step === 'otp' && `OTP sent to +91 ${mobile}`}
+            {step === 'otp' && OTP sent to +91 ${mobile}}
             {step === 'details' && 'A few details to get started'}
           </p>
         </div>
+
+        {error && (
+          <div className="mb-4 rounded-xl bg-error/10 px-4 py-2.5 text-xs text-error">{error}</div>
+        )}
 
         {step === 'mobile' && (
           <div className="space-y-4">
@@ -158,8 +231,12 @@ export default function LoginPage() {
               <a href="/terms" className="text-primary underline">Terms of Service</a> &{' '}
               <a href="/privacy" className="text-primary underline">Privacy Policy</a>
             </label>
-            <button disabled={!agreed || !fullName} className="btn-gold w-full disabled:opacity-50">
-              Create Account
+            <button
+              onClick={completeSignup}
+              disabled={!agreed || !fullName || loading}
+              className="btn-gold w-full disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : 'Create Account'}
             </button>
           </div>
         )}
