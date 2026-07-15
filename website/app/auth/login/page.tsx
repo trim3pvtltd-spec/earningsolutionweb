@@ -60,14 +60,13 @@ export default function LoginPage() {
       const result = await confirmationRef.current.confirm(otp);
       const idToken = await result.user.getIdToken();
 
-      const { data } = await api.post('/auth/verify-otp', { idToken, deviceId: 'web' }).catch(
-        async (err) => {
-          if (err.response?.status === 400) {
-            return { data: null };
-          }
-          throw err;
-        },
-      );
+      let data = null;
+      try {
+        const response = await api.post('/auth/verify-otp', { idToken, deviceId: 'web' });
+        data = response.data;
+      } catch (err: any) {
+        if (err.response?.status !== 400) throw err;
+      }
 
       if (!data) {
         setStep('details');
@@ -91,18 +90,18 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const currentUser = firebaseAuth.currentUser;
-      if (!currentUser) throw new Error('Session expired — please verify your mobile number again.');
+      if (!currentUser) throw new Error('Session expired. Please verify your mobile number again.');
       const freshIdToken = await currentUser.getIdToken();
 
-      const { data } = await api.post('/auth/verify-otp', {
+      const response = await api.post('/auth/verify-otp', {
         idToken: freshIdToken,
         fullName,
         referralCode: referralCode || undefined,
         deviceId: 'web',
       });
 
-      localStorage.setItem('ews_access_token', data.accessToken);
-      localStorage.setItem('ews_refresh_token', data.refreshToken);
+      localStorage.setItem('ews_access_token', response.data.accessToken);
+      localStorage.setItem('ews_refresh_token', response.data.refreshToken);
       router.push('/dashboard');
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Could not create account. Please try again.');
