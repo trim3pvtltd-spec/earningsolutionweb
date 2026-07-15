@@ -40,7 +40,7 @@ export default function LoginPage() {
     try {
       const confirmation = await signInWithPhoneNumber(
         firebaseAuth,
-        +91${mobile},
+        `+91${mobile}`,
         recaptchaRef.current!,
       );
       confirmationRef.current = confirmation;
