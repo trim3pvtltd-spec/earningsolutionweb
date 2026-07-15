@@ -39,7 +39,7 @@ export default function HomePage() {
 
       {/* --- Hero --- */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-brand-gradient opacity-[0.03] dark:opacity-[0.08]" />
+        <div className="pointer-events-none absolute inset-0 bg-brand-gradient opacity-[0.03] dark:opacity-[0.08]" />
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-6 py-16 md:grid-cols-2 md:py-24">
           <div>
             <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-xs font-semibold text-accent">
