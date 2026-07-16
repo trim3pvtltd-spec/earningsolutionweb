@@ -120,9 +120,10 @@ export default function LoginPage() {
             <button
               key={lang}
               onClick={() => setLanguage(lang)}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-                language === lang ? 'bg-gold-gradient text-primary' : 'text-white/70'
-              }`}
+              className={
+                'rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ' +
+                (language === lang ? 'bg-gold-gradient text-primary' : 'text-white/70')
+              }
             >
               {lang === 'en' ? 'EN' : lang === 'hi' ? 'हिं' : 'Hinglish'}
             </button>
@@ -138,7 +139,7 @@ export default function LoginPage() {
           <h1 className="mt-4 text-xl font-bold text-ink">Earning with Solution</h1>
           <p className="mt-1 text-sm text-ink-muted">
             {step === 'mobile' && 'Login or sign up with your mobile number'}
-            {step === 'otp' && OTP sent to +91 ${mobile}}
+            {step === 'otp' && 'OTP sent to +91 ' + mobile}
             {step === 'details' && 'A few details to get started'}
           </p>
         </div>
